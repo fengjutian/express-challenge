@@ -48,7 +48,9 @@ async def websocket_endpoint(websocket: WebSocket):
     while True:
         try:
             # 接收前端发送的人脸ROI（Base64）
+            print("👂 Waiting for data from frontend...")
             data = await websocket.receive_text()
+            print("... Received data.")
 
             # Guard against malformed JSON or missing fields
             try:
@@ -56,21 +58,26 @@ async def websocket_endpoint(websocket: WebSocket):
                 img_b64 = obj.get("image")
                 if not img_b64:
                     # Bad payload, skip
+                    print("⚠️ Missing 'image' field in JSON payload.")
                     await websocket.send_json({"error": "missing image field"})
                     continue
             except json.JSONDecodeError:
+                print("⚠️ Invalid JSON received.")
                 await websocket.send_json({"error": "invalid json"})
                 continue
 
             try:
+                print("🖼️ Decoding base64 image...")
                 img_data = base64.b64decode(img_b64)
                 image = Image.open(io.BytesIO(img_data)).convert("RGB")
+                print("... Image decoded successfully.")
             except Exception as decode_err:
                 await websocket.send_json({"error": "invalid image data"})
                 print("⚠️ invalid image data:", decode_err)
                 continue
 
             # 模型推理
+            print("🧠 Performing model inference...")
             inputs = extractor(images=image, return_tensors="pt")
             with torch.no_grad():
                 logits = model(**inputs).logits
@@ -78,12 +85,16 @@ async def websocket_endpoint(websocket: WebSocket):
             pred = int(probs.argmax())
             label = id2label[pred]
             conf = float(probs[pred])
+            print(f"... Inference complete. Detected: {label} (Confidence: {conf:.2f})")
+
 
             # 发送结果
+            print("📤 Sending results to frontend...")
             await websocket.send_json({
                 "emotion": label,
                 "confidence": conf
             })
+            print("... Results sent.")
         except WebSocketDisconnect as e:
             # Client closed the connection (code available on some websockets implementations)
             print("❌ WebSocket 客户端断开:", getattr(e, 'code', repr(e)))
