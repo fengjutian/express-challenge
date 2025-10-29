@@ -6,6 +6,10 @@ const resultDiv = document.getElementById('result');
 // 连接WebSocket
 const socket = new WebSocket("ws://localhost:8000/ws/emotion");
 
+socket.onopen = () => console.log('✅ WebSocket 已连接 (client)');
+socket.onclose = (ev) => console.warn('❌ WebSocket closed (client):', ev.code, ev.reason);
+socket.onerror = (err) => console.error('WebSocket error (client):', err);
+
 socket.onmessage = (event) => {
   const data = JSON.parse(event.data);
   resultDiv.innerText = `Emotion: ${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
