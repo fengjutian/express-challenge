@@ -60,25 +60,50 @@ function setupFaceDetectionCallback() {
   }
   
   faceDetector.onResults((results) => {
+  // Draw the frame onto canvas
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-  if (results.detections.length > 0) {
+
+  if (results.detections && results.detections.length > 0) {
     const box = results.detections[0].boundingBox;
-    const x = box.xMin * canvas.width;
-    const y = box.yMin * canvas.height;
-    const w = box.width * canvas.width;
-    const h = box.height * canvas.height;
 
-    // 截取人脸 ROI
-    const face = ctx.getImageData(x, y, w, h);
-    const tmpCanvas = document.createElement('canvas');
-    tmpCanvas.width = w;
-    tmpCanvas.height = h;
-    tmpCanvas.getContext('2d').putImageData(face, 0, 0);
-    const base64 = tmpCanvas.toDataURL('image/jpeg').split(',')[1];
+    // Compute raw coordinates
+    const rawX = box.xMin * canvas.width;
+    const rawY = box.yMin * canvas.height;
+    const rawW = box.width * canvas.width;
+    const rawH = box.height * canvas.height;
 
-    // 发送给后端
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ image: base64 }));
+    // Ensure values are finite numbers
+    if (![rawX, rawY, rawW, rawH].every(Number.isFinite)) {
+      // invalid values, skip this frame
+      return;
+    }
+
+    // Round and clamp to canvas bounds
+    const x = Math.max(0, Math.floor(rawX));
+    const y = Math.max(0, Math.floor(rawY));
+    // ensure width/height at least 1 and don't overflow canvas
+    const w = Math.max(1, Math.min(canvas.width - x, Math.floor(rawW)));
+    const h = Math.max(1, Math.min(canvas.height - y, Math.floor(rawH)));
+
+    // If ROI is degenerate, skip
+    if (w <= 0 || h <= 0) return;
+
+    try {
+      // 截取人脸 ROI — getImageData requires integer 'long' parameters
+      const face = ctx.getImageData(x, y, w, h);
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = w;
+      tmpCanvas.height = h;
+      tmpCanvas.getContext('2d').putImageData(face, 0, 0);
+      const base64 = tmpCanvas.toDataURL('image/jpeg').split(',')[1];
+
+      // 发送给后端
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ image: base64 }));
+      }
+    } catch (err) {
+      // If getImageData still throws (e.g., cross-origin or invalid region), skip gracefully
+      console.warn('Skipping frame due to getImageData error:', err);
     }
   }
 
