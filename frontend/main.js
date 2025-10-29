@@ -52,13 +52,16 @@ function connectWebSocket() {
     };
 
     socket.onmessage = (event) => {
+      console.log("Message from server: ", event.data);
       try {
         const data = JSON.parse(event.data);
+        console.log("Parsed data:", data);
         if (data.error) {
           resultDiv.innerHTML = `<div style="color: orange;">处理错误: ${data.error}</div>`;
         } else {
           lastEmotion = `${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
           resultDiv.innerHTML = `Emotion: ${lastEmotion}`;
+          console.log(123, lastEmotion);
         }
       } catch (err) {
         console.warn('Error parsing server message:', err);
@@ -198,9 +201,12 @@ async function initializeCamera() {
       audio: false 
     });
     
+    // Hide error container on success
+    document.getElementById('error-container').style.display = 'none';
+
     // 设置视频源
     video.srcObject = stream;
-    
+
     // 当视频准备好后开始检测
     video.onloadedmetadata = () => {
       // 使用requestAnimationFrame代替Camera类以避免依赖问题
@@ -216,10 +222,13 @@ async function initializeCamera() {
     console.log('✅ 摄像头访问成功');
   } catch (error) {
     console.error('❌ 摄像头访问失败:', error);
-    resultDiv.innerHTML = `
-      <div style="color: red;">无法访问摄像头: ${error.message}</div>
-      <div style="margin-top: 10px;">请确保摄像头已连接且未被其他应用占用</div>
-    `;
+    const errorContainer = document.getElementById('error-container');
+    const errorTitle = document.getElementById('error-title');
+    const errorMessage = document.getElementById('error-message');
+
+    errorTitle.textContent = '无法访问摄像头';
+    errorMessage.textContent = '请确保摄像头已连接，未被其他应用（如视频会议软件）占用，并已授予浏览器摄像头权限。';
+    errorContainer.style.display = 'block';
   }
 }
 

@@ -10,8 +10,12 @@
   </head>
   <body>
     <h2>🎭 实时情绪检测</h2>
+    <div id="error-container" style="display: none; background-color: #ffdddd; border-left: 6px solid #f44336; padding: 16px; margin-bottom: 16px;">
+      <strong id="error-title"></strong>
+      <p id="error-message"></p>
+    </div>
     <video id="video" autoplay playsinline width="640" height="480"></video>
     <canvas id="output" width="640" height="480"></canvas>
-    <div id="result"></div>
+    <div id="result"></div>11
   </body>
 </html>

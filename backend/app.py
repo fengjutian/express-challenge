@@ -42,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
     if not all([extractor, model, id2label]):
         print("❌ Model not initialized")
         return
-        
+
     await websocket.accept()
     print(f"✅ WebSocket connected from {websocket.client.host}:{websocket.client.port}")
     while True:
