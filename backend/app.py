@@ -4,20 +4,47 @@ import json
 import torch
 from PIL import Image
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocketDisconnect
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 
 app = FastAPI()
 
-# 加载模型 - 从本地文件夹导入
-extractor = AutoFeatureExtractor.from_pretrained("./vit-face-expression")
-model = AutoModelForImageClassification.from_pretrained("./vit-face-expression").eval()
-id2label = model.config.id2label
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
+# Global variables for model and processor
+extractor = None
+model = None
+id2label = None
+
+@app.on_event("startup")
+async def startup_event():
+    global extractor, model, id2label
+    try:
+        print("🔄 Loading model from ./vit-face-expression...")
+        extractor = AutoFeatureExtractor.from_pretrained("./vit-face-expression")
+        model = AutoModelForImageClassification.from_pretrained("./vit-face-expression").eval()
+        id2label = model.config.id2label
+        print("✅ Model loaded successfully")
+    except Exception as e:
+        print(f"❌ Error loading model: {str(e)}")
+        raise e  # Re-raise to prevent app from starting with broken model
 
 @app.websocket("/ws/emotion")
 async def websocket_endpoint(websocket: WebSocket):
+    if not all([extractor, model, id2label]):
+        print("❌ Model not initialized")
+        return
+        
     await websocket.accept()
-    print("✅ WebSocket 已连接")
+    print(f"✅ WebSocket connected from {websocket.client.host}:{websocket.client.port}")
     while True:
         try:
             # 接收前端发送的人脸ROI（Base64）

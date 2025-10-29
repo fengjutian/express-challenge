@@ -3,17 +3,70 @@ const canvas = document.getElementById('output');
 const ctx = canvas.getContext('2d');
 const resultDiv = document.getElementById('result');
 
-// 连接WebSocket
-const socket = new WebSocket("ws://localhost:8000/ws/emotion");
+// WebSocket connection management
+let socket = null;
+let reconnectAttempt = 0;
+const maxReconnectAttempts = 5;
+const baseReconnectDelay = 1000; // Start with 1 second
 
-socket.onopen = () => console.log('✅ WebSocket 已连接 (client)');
-socket.onclose = (ev) => console.warn('❌ WebSocket closed (client):', ev.code, ev.reason);
-socket.onerror = (err) => console.error('WebSocket error (client):', err);
+// Rate-limiting configuration (ms) — at most one send per sendInterval
+let lastSendTime = 0;
+const sendInterval = 200; // 200 ms -> ~5 FPS
 
-socket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  resultDiv.innerText = `Emotion: ${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
-};
+function connectWebSocket() {
+  if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+    return; // Already connecting or connected
+  }
+
+  try {
+    socket = new WebSocket("ws://localhost:8000/ws/emotion");
+
+    socket.onopen = () => {
+      console.log('✅ WebSocket 已连接 (client)');
+      reconnectAttempt = 0; // Reset attempt counter on successful connection
+      resultDiv.style.color = ''; // Reset any error styling
+    };
+
+    socket.onclose = (ev) => {
+      console.warn('❌ WebSocket closed (client):', ev.code, ev.reason);
+      
+      if (reconnectAttempt < maxReconnectAttempts) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 10000); // Exponential backoff, max 10s
+        console.log(`Attempting to reconnect in ${delay/1000}s... (attempt ${reconnectAttempt + 1}/${maxReconnectAttempts})`);
+        resultDiv.innerHTML = `<div style="color: orange;">正在重新连接服务器... (${reconnectAttempt + 1}/${maxReconnectAttempts})</div>`;
+        setTimeout(connectWebSocket, delay);
+        reconnectAttempt++;
+      } else {
+        console.error('Max reconnection attempts reached');
+        resultDiv.innerHTML = `
+          <div style="color: red;">无法连接到服务器</div>
+          <div style="margin-top: 10px;">请确保后端服务器正在运行 (localhost:8000)</div>
+        `;
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.error('WebSocket error (client):', err);
+      resultDiv.style.color = 'red';
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.error) {
+          resultDiv.innerHTML = `<div style="color: orange;">处理错误: ${data.error}</div>`;
+        } else {
+          resultDiv.innerHTML = `Emotion: ${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
+        }
+      } catch (err) {
+        console.warn('Error parsing server message:', err);
+      }
+    };
+  } catch (err) {
+    console.error('Error creating WebSocket:', err);
+    resultDiv.innerHTML = `<div style="color: red;">连接错误: ${err.message}</div>`;
+  }
+}
 
 // 初始化 MediaPipe - 使用正确的全局命名空间和配置
 let faceDetector;
@@ -101,9 +154,24 @@ function setupFaceDetectionCallback() {
       tmpCanvas.getContext('2d').putImageData(face, 0, 0);
       const base64 = tmpCanvas.toDataURL('image/jpeg').split(',')[1];
 
-      // 发送给后端
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ image: base64 }));
+      // 发送给后端 (限速，避免过多并发消息导致连接不稳定)
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        const now = Date.now();
+        // lastSendTime & sendInterval are defined at module scope
+        if ((now - lastSendTime) >= sendInterval) {
+          try {
+            socket.send(JSON.stringify({ image: base64 }));
+            lastSendTime = now;
+          } catch (err) {
+            console.warn('Error sending frame:', err);
+            // Force reconnect on send error
+            socket.close();
+            connectWebSocket();
+          }
+        }
+      } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+        // Try to reconnect if socket is null or closed
+        connectWebSocket();
       }
     } catch (err) {
       // If getImageData still throws (e.g., cross-origin or invalid region), skip gracefully
@@ -158,7 +226,10 @@ function initializeApp() {
     // 2. 设置人脸检测回调
     setupFaceDetectionCallback();
     
-    // 3. 初始化摄像头
+    // 3. 连接WebSocket
+    connectWebSocket();
+    
+    // 4. 初始化摄像头
     initializeCamera();
   } else {
     resultDiv.innerHTML = `
