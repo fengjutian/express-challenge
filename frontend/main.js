@@ -53,7 +53,13 @@ function initializeFaceDetection() {
 }
 
 // 检测到人脸时
-faceDetector.onResults((results) => {
+function setupFaceDetectionCallback() {
+  if (!faceDetector) {
+    console.error('❌ 无法设置人脸检测回调: faceDetector 未初始化');
+    return;
+  }
+  
+  faceDetector.onResults((results) => {
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
   if (results.detections.length > 0) {
     const box = results.detections[0].boundingBox;
@@ -75,7 +81,9 @@ faceDetector.onResults((results) => {
       socket.send(JSON.stringify({ image: base64 }));
     }
   }
+
 });
+}
 
 // 启动摄像头或提供备用方案
 async function initializeCamera() {
@@ -111,4 +119,25 @@ async function initializeCamera() {
 }
 
 // 初始化应用
-initializeCamera();
+function initializeApp() {
+  console.log('🔄 开始初始化应用...');
+  
+  // 1. 首先初始化人脸检测
+  const faceDetectionReady = initializeFaceDetection();
+  
+  if (faceDetectionReady) {
+    // 2. 设置人脸检测回调
+    setupFaceDetectionCallback();
+    
+    // 3. 初始化摄像头
+    initializeCamera();
+  } else {
+    resultDiv.innerHTML = `
+      <div style="color: red;">人脸检测组件初始化失败</div>
+      <div style="margin-top: 10px;">请检查 MediaPipe 脚本是否正确加载</div>
+    `;
+  }
+}
+
+// 当页面加载完成后初始化应用
+window.addEventListener('DOMContentLoaded', initializeApp);
