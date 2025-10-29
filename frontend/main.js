@@ -11,17 +11,17 @@ socket.onmessage = (event) => {
   resultDiv.innerText = `Emotion: ${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
 };
 
-// 初始化 MediaPipe
-const faceDetection = new FaceDetection.FaceDetection({
+// 初始化 MediaPipe - 使用正确的全局命名空间
+const faceDetector = new FaceDetection({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`,
 });
-faceDetection.setOptions({
+faceDetector.setOptions({
   model: 'short',   // 快速模型
   minDetectionConfidence: 0.5
 });
 
 // 检测到人脸时
-faceDetection.onResults((results) => {
+faceDetector.onResults((results) => {
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
   if (results.detections.length > 0) {
     const box = results.detections[0].boundingBox;
@@ -48,7 +48,7 @@ faceDetection.onResults((results) => {
 // 启动摄像头
 const camera = new Camera(video, {
   onFrame: async () => {
-    await faceDetection.send({ image: video });
+    await faceDetector.send({ image: video });
   },
   width: 640,
   height: 480
