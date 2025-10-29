@@ -12,6 +12,7 @@ const baseReconnectDelay = 1000; // Start with 1 second
 // Rate-limiting configuration (ms) — at most one send per sendInterval
 let lastSendTime = 0;
 const sendInterval = 200; // 200 ms -> ~5 FPS
+let lastEmotion = '';
 
 function connectWebSocket() {
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
@@ -56,7 +57,8 @@ function connectWebSocket() {
         if (data.error) {
           resultDiv.innerHTML = `<div style="color: orange;">处理错误: ${data.error}</div>`;
         } else {
-          resultDiv.innerHTML = `Emotion: ${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
+          lastEmotion = `${data.emotion} (${(data.confidence * 100).toFixed(1)}%)`;
+          resultDiv.innerHTML = `Emotion: ${lastEmotion}`;
         }
       } catch (err) {
         console.warn('Error parsing server message:', err);
@@ -119,6 +121,12 @@ function setupFaceDetectionCallback() {
   faceDetector.onResults((results) => {
   // Draw the frame onto canvas
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+  if (lastEmotion) {
+    ctx.fillStyle = 'white';
+    ctx.font = '30px Arial';
+    ctx.fillText(lastEmotion, 10, 40);
+  }
 
   if (results.detections && results.detections.length > 0) {
     const box = results.detections[0].boundingBox;
