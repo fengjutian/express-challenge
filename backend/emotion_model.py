@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 
 class EmotionModel:
-    def __init__(self, model_name="trpakov/vit-face-expression"):
+    def __init__(self, model_name="./vit-face-expression"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.extractor = AutoFeatureExtractor.from_pretrained(model_name)
         self.model = AutoModelForImageClassification.from_pretrained(model_name).to(self.device)

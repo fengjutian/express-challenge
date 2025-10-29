@@ -8,9 +8,9 @@ from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 
 app = FastAPI()
 
-# 加载模型
-extractor = AutoFeatureExtractor.from_pretrained("trpakov/vit-face-expression")
-model = AutoModelForImageClassification.from_pretrained("trpakov/vit-face-expression").eval()
+# 加载模型 - 从本地文件夹导入
+extractor = AutoFeatureExtractor.from_pretrained("./vit-face-expression")
+model = AutoModelForImageClassification.from_pretrained("./vit-face-expression").eval()
 id2label = model.config.id2label
 
 @app.websocket("/ws/emotion")
