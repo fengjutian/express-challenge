@@ -86,7 +86,7 @@ function initializeFaceDetection() {
       
       faceDetector.setOptions({
         model: 'short',   // 快速模型
-        minDetectionConfidence: 0.5
+        minDetectionConfidence: 0.3
       });
       
       console.log('✅ FaceDetection 初始化成功');
@@ -132,15 +132,17 @@ function setupFaceDetectionCallback() {
   }
 
   if (results.detections && results.detections.length > 0) {
+    console.log("Face detected!", results.detections);
     const box = results.detections[0].boundingBox;
 
     // Compute raw coordinates
-    const rawX = box.xMin * canvas.width;
-    const rawY = box.yMin * canvas.height;
+    const rawX = box.width * canvas.width;
+    const rawY = box.height * canvas.height;
     const rawW = box.width * canvas.width;
     const rawH = box.height * canvas.height;
 
     // Ensure values are finite numbers
+    console.log('Raw coordinates:', rawX, rawY, rawW, rawH);
     if (![rawX, rawY, rawW, rawH].every(Number.isFinite)) {
       // invalid values, skip this frame
       return;
@@ -154,6 +156,7 @@ function setupFaceDetectionCallback() {
     const h = Math.max(1, Math.min(canvas.height - y, Math.floor(rawH)));
 
     // If ROI is degenerate, skip
+    console.log("Raw coordinates:");
     if (w <= 0 || h <= 0) return;
 
     try {
@@ -165,12 +168,15 @@ function setupFaceDetectionCallback() {
       tmpCanvas.getContext('2d').putImageData(face, 0, 0);
       const base64 = tmpCanvas.toDataURL('image/jpeg').split(',')[1];
 
+      console.log("Sending face data to backend...");
+
       // 发送给后端 (限速，避免过多并发消息导致连接不稳定)
       if (socket && socket.readyState === WebSocket.OPEN) {
         const now = Date.now();
         // lastSendTime & sendInterval are defined at module scope
         if ((now - lastSendTime) >= sendInterval) {
           try {
+            console.log("Sending face data to backend...");
             socket.send(JSON.stringify({ image: base64 }));
             lastSendTime = now;
           } catch (err) {
@@ -180,14 +186,19 @@ function setupFaceDetectionCallback() {
             connectWebSocket();
           }
         }
-      } else if (!socket || socket.readyState === WebSocket.CLOSED) {
-        // Try to reconnect if socket is null or closed
-        connectWebSocket();
+      } else {
+        console.log("WebSocket not open. Ready state: " + (socket ? socket.readyState : 'null'));
+        if (!socket || socket.readyState === WebSocket.CLOSED) {
+          // Try to reconnect if socket is null or closed
+          connectWebSocket();
+        }
       }
     } catch (err) {
       // If getImageData still throws (e.g., cross-origin or invalid region), skip gracefully
       console.warn('Skipping frame due to getImageData error:', err);
     }
+  } else {
+    console.log("No face detected.");
   }
 
 });
